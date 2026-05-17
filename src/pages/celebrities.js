@@ -1,64 +1,80 @@
-import { peopleService } from '../api/peopleService.js';
-import { createCard } from '../components/Card.js';
-import { renderPagination, bindPaginationEvents } from '../components/Pagination.js';
+// ============================================================
+// celebrities.js
+// PURPOSE: Renders the Celebrities page.
+// Sections: Hero (trending people), Trending People, All Celebrities + Pagination.
+// ============================================================
 
-let currentPeoplePage = 1;
+import { createNavbar, initNavbar } from '../components/Navbar.js';
+import { createFooter } from '../components/Footer.js';
+import { createHero, initHero } from '../components/Hero.js';
+import { createPersonCard } from '../components/Card.js';
+import { createPagination, initPagination } from '../components/Pagination.js';
 
-export async function renderCelebritiesPage(viewportElement) {
-  viewportElement.innerHTML = `
-    <div style="padding: 20px 4%; max-width: 1400px; margin: 0 auto;">
-      <div id="celeb-hero-banner" style="height: 350px; border-radius: 12px; background-size: cover; background-position: center 20%; display: flex; align-items: flex-end; margin-bottom: 40px;"></div>
-      
-      <section>
-        <h2 style="margin-bottom: 20px; font-size: 1.6rem;">Popular Celebrities</h2>
-        <div id="celebrities-grid-outlet"></div>
-        <div id="celebrities-pagination-outlet"></div>
+import { getTrendingPeople, getAllCelebrities } from '../api/peopleService.js';
+
+let currentPage = 1;
+let totalPages = 1;
+
+export async function renderCelebrities(container, navigate) {
+  currentPage = 1;
+
+  container.innerHTML = `
+    ${createNavbar('celebrities')}
+    <main>
+      <div id="hero-container"><div class="loading">Loading...</div></div>
+
+      <section class="section">
+        <h2 class="section__title">Trending People</h2>
+        <div class="cards-grid" id="trending-people"><div class="loading">Loading...</div></div>
       </section>
-    </div>
+
+      <section class="section">
+        <h2 class="section__title">All Celebrities</h2>
+        <div class="cards-grid" id="all-celebrities"><div class="loading">Loading...</div></div>
+        <div id="pagination-container"></div>
+      </section>
+    </main>
+    ${createFooter()}
   `;
 
-  // 1. Fetch weekly trending individuals to fill out the top spotlight panel [cite: 62-63]
-  const trendingPeople = await peopleService.getTrendingPeople();
-  const banner = document.getElementById('celeb-hero-banner');
-  
-  if (trendingPeople?.results?.length > 0) {
-    const starSpotlight = trendingPeople.results[0];
-    banner.style.backgroundImage = `linear-gradient(to top, rgba(18,18,18,1), rgba(0,0,0,0.2)), url('https://image.tmdb.org/t/p/original${starSpotlight.backdrop_path || starSpotlight.profile_path}')`;
-    banner.innerHTML = `
-      <div style="padding: 30px;">
-        <span style="background-color: #e50914; padding: 4px 10px; font-size: 0.8rem; text-transform: uppercase; border-radius: 4px; font-weight: bold; letter-spacing: 1px;">Weekly Spotlight</span>
-        <h1 style="font-size: 2.5rem; margin-top: 8px; margin-bottom: 5px;">${starSpotlight.name}</h1>
-        <p style="color: #ccc; font-size: 1rem;">Trending for: ${starSpotlight.known_for_department || 'Acting'}</p>
-      </div>
-    `;
+  initNavbar(navigate);
+
+  try {
+    const trending = await getTrendingPeople();
+
+    document.getElementById('hero-container').innerHTML = createHero(trending, 'person');
+    initHero();
+
+    document.getElementById('trending-people').innerHTML = trending
+      .slice(0, 6)
+      .map((p) => createPersonCard(p))
+      .join('');
+
+    await loadAllCelebrities();
+
+  } catch (err) {
+    console.error('Celebrities page failed:', err);
   }
+}
 
-  // 2. Fetch the continuous popular celebrities grid layout framework [cite: 64-67]
-  async function loadCelebritiesGrid() {
-    const gridOutlet = document.getElementById('celebrities-grid-outlet');
-    const paginationOutlet = document.getElementById('celebrities-pagination-outlet');
+async function loadAllCelebrities() {
+  const grid = document.getElementById('all-celebrities');
+  const pagination = document.getElementById('pagination-container');
+  grid.innerHTML = '<div class="loading">Loading...</div>';
 
-    gridOutlet.innerHTML = `<div style="padding: 40px; text-align: center; color: #666;">Populating celebrity listings...</div>`;
-    
-    const celebData = await peopleService.getAllCelebrities(currentPeoplePage);
+  try {
+    const data = await getAllCelebrities(currentPage);
+    totalPages = data.total_pages;
 
-    if (celebData && celebData.results) {
-      gridOutlet.innerHTML = `
-        <div class="cards-grid">
-          ${celebData.results.map(person => createCard(person, 'person')).join('')}
-        </div>
-      `;
+    grid.innerHTML = data.results.map((p) => createPersonCard(p)).join('');
 
-      paginationOutlet.innerHTML = renderPagination(currentPeoplePage, celebData.total_pages);
-
-      bindPaginationEvents(currentPeoplePage, celebData.total_pages, (targetPageNumber) => {
-        currentPeoplePage = targetPageNumber;
-        loadCelebritiesGrid();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-    }
+    pagination.innerHTML = createPagination(currentPage, totalPages);
+    initPagination(currentPage, totalPages, (newPage) => {
+      currentPage = newPage;
+      loadAllCelebrities();
+      grid.scrollIntoView({ behavior: 'smooth' });
+    });
+  } catch (err) {
+    grid.innerHTML = '<p class="error">Failed to load celebrities.</p>';
   }
-
-  // Auto-initiate grid view instantly
-  loadCelebritiesGrid();
 }
