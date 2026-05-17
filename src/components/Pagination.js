@@ -1,31 +1,48 @@
+// ============================================================
+// Pagination.js
+// PURPOSE: Renders page number buttons. Calls a callback on click.
+// ============================================================
+
 /**
- * Renders the universal content control navigation bar
+ * Returns Pagination HTML.
+ * @param {number} currentPage
+ * @param {number} totalPages
  */
-export function renderPagination(currentPage, totalPages) {
-  // Cap TMDB pages at 500 max to follow safe remote API guidelines [cite: 251]
-  const maxSafePages = totalPages > 500 ? 500 : totalPages;
+export function createPagination(currentPage, totalPages) {
+  const max = Math.min(totalPages, 10); // Cap at 10 pages displayed
+
+  let buttons = '';
+  for (let i = 1; i <= max; i++) {
+    buttons += `<button class="pagination__btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+  }
 
   return `
-    <div class="pagination-container" style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 40px; padding: 20px 0;">
-      <button id="btn-prev-page" ${currentPage === 1 ? 'disabled' : ''} style="padding: 10px 20px; background-color: #1e1e1e; border: 1px solid #333; color: white; border-radius: 4px; cursor: pointer;">
-        Previous
-      </button>
-      <span style="color: #aaa; font-size: 0.95rem;">Page <strong>${currentPage}</strong> of ${maxSafePages}</span>
-      <button id="btn-next-page" ${currentPage === maxSafePages ? 'disabled' : ''} style="padding: 10px 20px; background-color: #1e1e1e; border: 1px solid #333; color: white; border-radius: 4px; cursor: pointer;">
-        Next
-      </button>
+    <div class="pagination">
+      <button class="pagination__btn pagination__arrow" id="prev-page" ${currentPage === 1 ? 'disabled' : ''}>‹</button>
+      ${buttons}
+      <button class="pagination__btn pagination__arrow" id="next-page" ${currentPage === max ? 'disabled' : ''}>›</button>
     </div>
   `;
 }
 
-export function bindPaginationEvents(currentPage, totalPages, onPageChange) {
-  const maxSafePages = totalPages > 500 ? 500 : totalPages;
-  
-  document.getElementById('btn-prev-page')?.addEventListener('click', () => {
+/**
+ * Attaches click events to pagination buttons.
+ * @param {number} currentPage
+ * @param {number} totalPages
+ * @param {Function} onPageChange - Called with (newPage: number)
+ */
+export function initPagination(currentPage, totalPages, onPageChange) {
+  const max = Math.min(totalPages, 10);
+
+  document.querySelectorAll('.pagination__btn[data-page]').forEach((btn) => {
+    btn.addEventListener('click', () => onPageChange(parseInt(btn.dataset.page)));
+  });
+
+  document.getElementById('prev-page')?.addEventListener('click', () => {
     if (currentPage > 1) onPageChange(currentPage - 1);
   });
 
-  document.getElementById('btn-next-page')?.addEventListener('click', () => {
-    if (currentPage < maxSafePages) onPageChange(currentPage + 1);
+  document.getElementById('next-page')?.addEventListener('click', () => {
+    if (currentPage < max) onPageChange(currentPage + 1);
   });
 }
