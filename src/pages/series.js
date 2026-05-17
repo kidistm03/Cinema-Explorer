@@ -1,67 +1,106 @@
-import { seriesService } from '../api/seriesService.js';
-import { createCard } from '../components/Card.js';
-import { renderSidebar } from '../components/Sidebar.js';
-import { renderPagination, bindPaginationEvents } from '../components/Pagination.js';
+// ============================================================
+// series.js
+// PURPOSE: Renders the Series page.
+// Same layout as movies.js but uses TV endpoints.
+// ============================================================
 
-let currentSelectedGenre = "";
-let currentCatalogPage = 1;
+import { createNavbar, initNavbar } from '../components/Navbar.js';
+import { createFooter } from '../components/Footer.js';
+import { createHero, initHero } from '../components/Hero.js';
+import { createMediaCard } from '../components/Card.js';
+import { createSidebar, initSidebar } from '../components/Sidebar.js';
+import { createPagination, initPagination } from '../components/Pagination.js';
 
-export async function renderSeriesPage(viewportElement) {
-  // 1. Structural base layout shell matching your columns
-  viewportElement.innerHTML = `
-    <div class="series-view-wrapper" style="display: flex; gap: 30px; padding: 30px 4%; max-width: 1400px; margin: 0 auto;">
-      <div id="series-sidebar-placement"></div>
-      <div class="catalog-main-feed" style="flex-grow: 1;">
-        <h2 id="catalog-title" style="margin-bottom: 20px; font-size: 1.6rem;">TV Series Catalog</h2>
-        <div id="series-grid-outlet"></div>
-        <div id="series-pagination-outlet"></div>
-      </div>
-    </div>
+import { getOnAirSeries, getTrendingSeries, getSeriesByGenre } from '../api/seriesService.js';
+import { getTVGenres } from '../api/genreService.js';
+
+let activeGenreId = null;
+let currentPage = 1;
+let totalPages = 1;
+
+export async function renderSeries(container, navigate) {
+  activeGenreId = null;
+  currentPage = 1;
+
+  container.innerHTML = `
+    ${createNavbar('series')}
+    <main>
+      <div id="hero-container"><div class="loading">Loading...</div></div>
+
+      <section class="section">
+        <h2 class="section__title">Trending Shows</h2>
+        <div class="cards-grid" id="trending-series"><div class="loading">Loading...</div></div>
+      </section>
+
+      <section class="section">
+        <div class="genre-layout">
+          <div id="sidebar-container"><div class="loading">Loading...</div></div>
+          <div class="genre-content">
+            <h2 class="section__title" id="genre-title">Action & Adventure</h2>
+            <div class="cards-grid" id="genre-grid"><div class="loading">Loading...</div></div>
+            <div id="pagination-container"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    ${createFooter()}
   `;
 
-  // 2. Fetch the TV categories list and inject into the sidebar layout
-  const genrePayload = await seriesService.getSeriesGenres();
-  if (genrePayload && genrePayload.genres) {
-    document.getElementById('series-sidebar-placement').innerHTML = renderSidebar(
-      genrePayload.genres,
-      (selectedGenreId) => {
-        currentSelectedGenre = selectedGenreId;
-        currentCatalogPage = 1; // Reset view indexes back to 1
-        loadSeriesGridContent();
-      }
-    );
-  }
+  initNavbar(navigate);
 
-  // 3. Child rendering data pipeline function
-  async function loadSeriesGridContent() {
-    const gridOutlet = document.getElementById('series-grid-outlet');
-    const paginationOutlet = document.getElementById('series-pagination-outlet');
-    
-    gridOutlet.innerHTML = `<div style="padding: 40px; text-align: center; color: #666;">Populating TV records...</div>`;
-    paginationOutlet.innerHTML = "";
+  try {
+    const [onAir, trending, genres] = await Promise.all([
+      getOnAirSeries(),
+      getTrendingSeries(),
+      getTVGenres(),
+    ]);
 
-    // Pull television items through the decoupled service layer
-    const seriesData = await seriesService.getSeriesByGenre(currentSelectedGenre, currentCatalogPage);
+    document.getElementById('hero-container').innerHTML = createHero(onAir, 'tv');
+    initHero();
 
-    if (seriesData && seriesData.results.length > 0) {
-      gridOutlet.innerHTML = `
-        <div class="cards-grid">
-          ${seriesData.results.map(tvShow => createCard(tvShow, 'tv')).join('')}
-        </div>
-      `;
+    document.getElementById('trending-series').innerHTML = trending
+      .slice(0, 6)
+      .map((s) => createMediaCard(s, 'tv'))
+      .join('');
 
-      paginationOutlet.innerHTML = renderPagination(currentCatalogPage, seriesData.total_pages);
-      
-      bindPaginationEvents(currentCatalogPage, seriesData.total_pages, (targetPageNumber) => {
-        currentCatalogPage = targetPageNumber;
-        loadSeriesGridContent();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-    } else {
-      gridOutlet.innerHTML = `<p style="padding: 40px; text-align: center; color: var(--text-muted);">No shows located in this genre category.</p>`;
+    document.getElementById('sidebar-container').innerHTML = createSidebar(genres);
+    initSidebar((genreId) => {
+      activeGenreId = genreId;
+      currentPage = 1;
+      const name = genres.find((g) => g.id === genreId)?.name || 'Series';
+      document.getElementById('genre-title').textContent = name;
+      loadGenreSeries();
+    });
+
+    if (genres.length > 0) {
+      activeGenreId = genres[0].id;
+      document.getElementById('genre-title').textContent = genres[0].name;
     }
-  }
+    await loadGenreSeries();
 
-  // Execute base loop dynamically
-  loadSeriesGridContent();
+  } catch (err) {
+    console.error('Series page failed:', err);
+  }
+}
+
+async function loadGenreSeries() {
+  const grid = document.getElementById('genre-grid');
+  const pagination = document.getElementById('pagination-container');
+  grid.innerHTML = '<div class="loading">Loading...</div>';
+
+  try {
+    const data = await getSeriesByGenre(activeGenreId, currentPage);
+    totalPages = data.total_pages;
+
+    grid.innerHTML = data.results.map((s) => createMediaCard(s, 'tv')).join('');
+
+    pagination.innerHTML = createPagination(currentPage, totalPages);
+    initPagination(currentPage, totalPages, (newPage) => {
+      currentPage = newPage;
+      loadGenreSeries();
+      grid.scrollIntoView({ behavior: 'smooth' });
+    });
+  } catch (err) {
+    grid.innerHTML = '<p class="error">Failed to load series.</p>';
+  }
 }
