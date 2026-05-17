@@ -1,20 +1,30 @@
-import { fetchFromTMDB } from './tmdbConfig.js';
+// ============================================================
+// seriesService.js
+// PURPOSE: All TV series-related API calls. Nothing else.
+// ============================================================
 
-export const seriesService = {
-  // Pulls recent TV shows for the Series Page hero section carousel [cite: 48, 250]
-  getRecentSeries: () => fetchFromTMDB('/tv/now_playing?language=en-US&page=1'),
+import { fetchFromTMDB } from './apiClient.js';
 
-  // Pulls the top trending TV shows for the week [cite: 241]
-  getTrendingSeries: () => fetchFromTMDB('/trending/tv/week'),
+/** Hero carousel: currently airing shows */
+export async function getOnAirSeries(page = 1) {
+  const data = await fetchFromTMDB(`/tv/on_the_air?language=en-US&page=${page}`);
+  return data.results;
+}
 
-  // Fetches the entire category checklist mapping for the TV sidebar [cite: 52]
-  getSeriesGenres: () => fetchFromTMDB('/genre/tv/list?language=en'),
+/** Trending section on Home page */
+export async function getTrendingSeries() {
+  const data = await fetchFromTMDB('/trending/tv/week');
+  return data.results;
+}
 
-  // Fetches TV series filtered by genre ID with support for pagination [cite: 54, 250]
-  getSeriesByGenre: (genreId, page = 1) => {
-    const queryPath = genreId
-      ? `/discover/tv?with_genres=${genreId}&page=${page}&language=en-US`
-      : `/tv/popular?language=en-US&page=${page}`;
-    return fetchFromTMDB(queryPath);
-  }
-};
+/** Trending section on Series page (popular) */
+export async function getPopularSeries(page = 1) {
+  return await fetchFromTMDB(`/tv/popular?language=en-US&page=${page}`);
+}
+
+/** Genre-filtered grid + pagination on Series page */
+export async function getSeriesByGenre(genreId, page = 1) {
+  return await fetchFromTMDB(
+    `/discover/tv?with_genres=${genreId}&page=${page}&language=en-US`
+  );
+}
