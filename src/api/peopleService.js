@@ -1,9 +1,17 @@
-import { fetchFromTMDB } from './tmdbConfig.js';
+// ============================================================
+// peopleService.js
+// PURPOSE: All celebrity/people-related API calls. Nothing else.
+// ============================================================
 
-export const peopleService = {
-  // Pulls top weekly trending celebrities for the hero frame view spotlight [cite: 62-63, 252]
-  getTrendingPeople: () => fetchFromTMDB('/trending/person/week'),
+import { fetchFromTMDB } from './apiClient.js';
 
-  // Pulls all popular celebrities sorted cleanly with pagination indexing parameters [cite: 66, 252]
-  getAllCelebrities: (page = 1) => fetchFromTMDB(`/person/popular?language=en-US&page=${page}`)
-};
+/** Trending people (hero + trending section) */
+export async function getTrendingPeople() {
+  const data = await fetchFromTMDB('/trending/person/week');
+  return data.results;
+}
+
+/** Paginated list of all popular celebrities */
+export async function getAllCelebrities(page = 1) {
+  return await fetchFromTMDB(`/person/popular?language=en-US&page=${page}`);
+}
